@@ -33,21 +33,23 @@ function mtuCalc() {
 }
 
 function hostPoll() {
-  ping -c 1 -t 5 $1
-  if [ $? -eq 0 ] ; then
+  ping -c 1 -t 5 $1 &> /dev/null
+  if [ $? -eq 0 ]; then
       exit 0
     else
-      
       exit 1
   fi
 }
 
 function localSitePoll {
-  for i in ${localHostList[@]}; do
+  for i in ${localHostList[@]} ; do
     hostPoll $i
-    if [ $? -eq 1 ] ; then
+    if [ $? -eq 1 ]; then
       echo "$i down!"
-    fi    
+      else
+      echo "$i up!"
+    fi   
+  done
 }
 
 function publicIPcheck() {
@@ -56,6 +58,8 @@ function publicIPcheck() {
     echo "Public IP changed!"
   fi
 }
+
+importValues
 
 localSitePoll
 
