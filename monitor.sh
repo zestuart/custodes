@@ -1,10 +1,27 @@
 #!/bin/bash
 
+function environmentTest {
+  if [ -f values/configured ] ; then
+  requiredFiles=(defaultGateway localHostList mtuSize publicIP remoteHost)
+  for i in ${requiredFiles[@]} ; do
+    if [[ ! -f values/$i ]] ; then
+        echo "missing file: values/$i; aborting"
+        exit 1
+    fi
+  done
+  else
+    echo "no evidence of initial configuration; aborting"
+    exit 1
+  fi
+}
+
 function importValues {
   remoteHost=$(cat values/remoteHost)
   mtuSize=$(cat values/mtuSize)
   publicIP=$(cat values/publicIP)
   localHostList=($(cat values/localHostList))
+  defaultGateway=$(netstat -nr | grep UG | awk '{print $2}')
+  routingInterface=$(netstat -nr | grep UG | awk '{print $8}')
 }
 
 function mtuCalc() {
@@ -35,32 +52,47 @@ function mtuCalc() {
 function hostPoll() {
   ping -c 1 -t 5 $1 &> /dev/null
   if [ $? -eq 0 ]; then
-      exit 0
+      return 0
     else
-      exit 1
+      return 1
   fi
 }
 
 function localSitePoll {
+  echo $localHostList
   for i in ${localHostList[@]} ; do
     hostPoll $i
     if [ $? -eq 1 ]; then
       echo "$i down!"
+      return 1
       else
       echo "$i up!"
+      return 0
     fi   
   done
 }
 
 function publicIPcheck() {
   currentPublicIP=$(curl -s checkip.dyndns.com | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
-  if [[ $1 != $currentPublicIP ]] ; then
-    echo "Public IP changed!"
+  if [ $? -eq 10 ] ; then 
+    echo "Unable to determine public IP address; internet connection possibly down."
+    return 1
+    else
+    if [[ $1 != $currentPublicIP ]] ; then
+      echo "public IP changed"
+      else 
+      echo "public IP static"
+    fi
   fi
 }
 
+environmentTest
 importValues
 
-localSitePoll
-
-publicIPcheck $publicIP
+hostPoll $defaultGateway
+if [ $? -eq 0 ] ; then
+  publicIPcheck $publicIP  
+  localSitePoll
+else
+  echo "Unable to ping default gateway."
+fi
