@@ -25,12 +25,14 @@ function importValues {
 }
 
 function mtuCalc() {
+    mtuSize=$1
+    remoteIP=$2
   	mode=0
     pass=0
     failPoint=1
     while [[ $failPoint > 0 ]]; do
-      mtu=$(ping -D -c 1 -t 1 -s $1 $2 &>/dev/null)
-      if [ "$?" -eq "2" ]; then
+      mtu=$(ping -D -c 1 -t 3 -s $mtuSize $remoteIP &>/dev/null)
+      if [ "$?" -eq "1" ]; then
         if [[ $mode = 0 ]] ; then
           mtuSize=`expr $mtuSize - 10`
         else
@@ -42,7 +44,12 @@ function mtuCalc() {
           mode=1
           pass=1
         else
-          echo $mtuSize > /tmp/finalSize
+          if [[ $mtuSize -ne $(cat values/mtuSize) ]] ; then
+            echo "MTU size changed; old: $1, new: $mtuSize"
+            echo $mtuSize > values/mtuSize
+            else
+            echo "MTU size stable."
+          fi
           failPoint=0
         fi
       fi
@@ -59,27 +66,25 @@ function hostPoll() {
 }
 
 function localSitePoll {
-  echo $localHostList
   for i in ${localHostList[@]} ; do
     hostPoll $i
     if [ $? -eq 1 ]; then
       echo "$i down!"
-      return 1
       else
       echo "$i up!"
-      return 0
     fi   
   done
 }
 
 function publicIPcheck() {
-  currentPublicIP=$(curl -s checkip.dyndns.com | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
+  currentPublicIP=$(dig +short myip.opendns.com @resolver1.opendns.com)
   if [ $? -eq 10 ] ; then 
     echo "Unable to determine public IP address; internet connection possibly down."
     return 1
     else
     if [[ $1 != $currentPublicIP ]] ; then
-      echo "public IP changed"
+      echo "public IP changed; old: $1, new: $currentPublicIP"
+      echo $currentPublicIP > values/publicIP
       else 
       echo "public IP static"
     fi
@@ -92,7 +97,8 @@ importValues
 hostPoll $defaultGateway
 if [ $? -eq 0 ] ; then
   publicIPcheck $publicIP  
-  localSitePoll
+  #localSitePoll
+  mtuCalc $mtuSize $remoteHost
 else
   echo "Unable to ping default gateway."
 fi
