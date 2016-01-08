@@ -1,2 +1,14 @@
 values/*
 
+
+values/defaultGateway
+
+values/defaultGateway
+
+values/localHostList
+
+values/mtuSize
+
+values/remoteHost
+
+values/publicIP
